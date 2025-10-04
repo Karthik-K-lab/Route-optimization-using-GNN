@@ -6,4 +6,3 @@ shapely
 matplotlib
 streamlit-folium
 geopandas
-folium.plugins
