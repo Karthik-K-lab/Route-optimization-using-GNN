@@ -6,7 +6,6 @@ import networkx as nx
 import geopandas as gpd
 import numpy as np
 import folium
-from folium.plugins import MarkerDrag
 from streamlit_folium import st_folium
 from shapely.geometry import Point
 from matplotlib import cm, colors as mcolors
@@ -100,8 +99,8 @@ if place:
 
             # Map route with polyline and markers
             m2 = folium.Map(location=[start_lat, start_lon], zoom_start=13, tiles='OpenStreetMap')
-            folium.Marker([start_lat, start_lon], icon=folium.Icon(color='green')).add_to(m2)
-            folium.Marker([end_lat, end_lon], icon=folium.Icon(color='red')).add_to(m2)
+            folium.Marker([start_lat, start_lon], icon=folium.Icon(color='green'), tooltip="Start").add_to(m2)
+            folium.Marker([end_lat, end_lon], icon=folium.Icon(color='red'), tooltip="End").add_to(m2)
             folium.PolyLine(path_coords, color='blue', weight=6, tooltip="Safest Route").add_to(m2)
             for pt in path_coords:
                 folium.CircleMarker(pt, radius=2, color='blue', fill=True).add_to(m2)
