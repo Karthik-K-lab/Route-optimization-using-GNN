@@ -31,9 +31,23 @@ def load_graph_from_drive():
     G = ox.load_graphml(local_path)
     return G
 
+def add_edge_lengths(G):
+    """Compute and add 'length' (in meters) for all edges."""
+    for u, v, data in G.edges(data=True):
+        if 'length' not in data or data['length'] is None:
+            lat1, lon1 = G.nodes[u]['y'], G.nodes[u]['x']
+            lat2, lon2 = G.nodes[v]['y'], G.nodes[v]['x']
+            # Haversine distance
+            R = 6371000
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat / 2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1 - a))
+            data['length'] = R * c
+    return G
 # Load the graph
 G = load_graph_from_drive()
-
+G = add_edge_lengths(G)
 # Convert to GeoDataFrames
 nodes, edges = ox.graph_to_gdfs(G)
 
