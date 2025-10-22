@@ -14,7 +14,7 @@ from matplotlib import cm, colors as mcolors
 st.title("🌊 Flood-Safe Route Planner (Demo)")
 
 # Google Drive file URL (replace with your own)
-drive_url = "https://drive.google.com/uc?export=download&id=1AbCdEfGh123456789"
+drive_url = "https://drive.google.com/drive/folders/1xAVnQmcl26ddOZqrKu56jGb-kSXD6wFY?usp=drive_link"
 local_path = "chennai.graphml"
 
 # ------------------------------
