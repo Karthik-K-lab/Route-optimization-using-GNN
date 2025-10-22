@@ -102,7 +102,7 @@ if start_lat and end_lat:
     st.success(f"Start: ({start_lat:.5f}, {start_lon:.5f}) → End: ({end_lat:.5f}, {end_lon:.5f})")
 
     def nearest_node(G, lat, lon):
-    """Find the nearest node manually (no rtree or pygeos needed)."""
+        """Find the nearest node manually (no rtree or pygeos needed)."""
         min_dist = float("inf")
         nearest = None
         for node, data in G.nodes(data=True):
