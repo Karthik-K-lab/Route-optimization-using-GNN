@@ -116,7 +116,7 @@ center_lat, center_lon = float(node_y.mean()), float(node_x.mean())
 m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles="CartoDB positron")
 
 # Sample nodes to plot (limit for speed in browser)
-max_plot = 2000
+max_plot = 3000
 if len(nodes) <= max_plot:
     plot_nodes = nodes
 else:
