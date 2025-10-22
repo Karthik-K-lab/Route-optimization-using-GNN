@@ -1,9 +1,12 @@
 streamlit
-osmnx
 networkx
 folium
-shapely
 matplotlib
 streamlit-folium
-geopandas
 gdown
+osmnx==1.9.3
+networkx==3.3
+rtree
+scipy
+geopandas
+shapely
