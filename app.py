@@ -18,7 +18,6 @@ place = st.text_input("Enter your area or city (e.g., Chennai, India):", "Chenna
 @st.cache_resource(show_spinner=False)
 def load_graph(place):
     G = ox.graph_from_place(place, network_type='drive')
-    G = ox.project_graph(G)
     nodes, edges = ox.graph_to_gdfs(G)
     return G, nodes, edges
 
@@ -79,10 +78,8 @@ if place:
         st.success(f"Start: ({start_lat:.5f}, {start_lon:.5f}), End: ({end_lat:.5f}, {end_lon:.5f})")
 
         # 5. Route finding logic
-        def nearest_node(graph_nodes, lat, lon):
-            point = Point(lon, lat)
-            distances = graph_nodes.geometry.distance(point)
-            return distances.idxmin()
+        def nearest_node(G, lat, lon):
+            return ox.distance.nearest_nodes(G, lon, lat)
 
         u = nearest_node(nodes, start_lat, start_lon)
         v = nearest_node(nodes, end_lat, end_lon)
