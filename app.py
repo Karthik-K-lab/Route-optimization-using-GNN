@@ -17,7 +17,7 @@ from matplotlib import cm, colors as mcolors
 # Page config & title
 # ------------------------------
 st.set_page_config(page_title="Flood-Safe Route Planner", layout="wide")
-st.title("🌊 Flood-Safe Route Planner (Optimized & Fixed)")
+st.title("🌊 Flood-Safe Route Planner")
 
 # ------------------------------
 # Google Drive graph file (replace drive_id)
@@ -32,7 +32,7 @@ local_path = "chennai.graphml"
 def load_graph_from_drive(drive_id_local: str = drive_id, local_path_local: str = local_path):
     """Download (once) and load GraphML from Google Drive using gdown."""
     if not os.path.exists(local_path_local):
-        st.info("📥 Downloading map data from Google Drive (first time only)...")
+        st.info("📥 Downloading map data...")
         # gdown handles Google Drive confirmation tokens for large files
         gdown.download(id=drive_id_local, output=local_path_local, quiet=False)
     G_loaded = ox.load_graphml(local_path_local)
