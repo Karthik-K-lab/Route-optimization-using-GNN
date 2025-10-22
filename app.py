@@ -7,6 +7,7 @@ import geopandas as gpd
 import numpy as np
 import folium
 import requests
+import gdown
 import os
 from streamlit_folium import st_folium
 from matplotlib import cm, colors as mcolors
@@ -14,7 +15,7 @@ from matplotlib import cm, colors as mcolors
 st.title("🌊 Flood-Safe Route Planner (Demo)")
 
 # Google Drive file URL (replace with your own)
-drive_url = "https://drive.google.com/drive/folders/1xAVnQmcl26ddOZqrKu56jGb-kSXD6wFY?usp=drive_link"
+drive_id = "1gr1Z1EyY2h-R0o4ZVEy4dxCMpHFpvjRQ"
 local_path = "chennai.graphml"
 
 # ------------------------------
@@ -24,10 +25,7 @@ local_path = "chennai.graphml"
 def load_graph_from_drive():
     if not os.path.exists(local_path):
         st.info("📥 Downloading map data from Google Drive (only once)...")
-        response = requests.get(drive_url)
-        response.raise_for_status()
-        with open(local_path, "wb") as f:
-            f.write(response.content)
+        gdown.download(id=drive_id, output=local_path, quiet=False)
     G = ox.load_graphml(local_path)
     return G
 
