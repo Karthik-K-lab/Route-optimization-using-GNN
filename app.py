@@ -1,5 +1,6 @@
 # app.py
 
+from shapely.geometry import Point
 import streamlit as st
 import osmnx as ox
 import networkx as nx
