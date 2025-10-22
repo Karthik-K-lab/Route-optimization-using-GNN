@@ -14,82 +14,115 @@ from streamlit_folium import st_folium
 from matplotlib import cm, colors as mcolors
 
 # ------------------------------
-# 🌍 App Title
+# Page config & title
 # ------------------------------
 st.set_page_config(page_title="Flood-Safe Route Planner", layout="wide")
-st.title("🌊 Flood-Safe Route Planner (Optimized Demo)")
+st.title("🌊 Flood-Safe Route Planner (Optimized & Fixed)")
 
 # ------------------------------
-# 📁 Google Drive graph file
+# Google Drive graph file (replace drive_id)
 # ------------------------------
-drive_id = "18EcOIP4ReNoOgh-JKah42vsqhG4k1cXr"
-local_path = "tbm.graphml"
+drive_id = "1gr1Z1EyY2h-R0o4ZVEy4dxCMpHFpvjRQ"  # <-- replace with your file id
+local_path = "chennai.graphml"
 
 # ------------------------------
-# 1️⃣ Load Map Data (Cached)
+# 1) Load graph from Drive (cached safely: no unhashable args)
 # ------------------------------
 @st.cache_resource(show_spinner=True)
-def load_graph_from_drive():
-    """Load the pre-downloaded OSM graph from Google Drive (cached once)."""
-    if not os.path.exists(local_path):
+def load_graph_from_drive(drive_id_local: str = drive_id, local_path_local: str = local_path):
+    """Download (once) and load GraphML from Google Drive using gdown."""
+    if not os.path.exists(local_path_local):
         st.info("📥 Downloading map data from Google Drive (first time only)...")
-        gdown.download(id=drive_id, output=local_path, quiet=False)
-    return ox.load_graphml(local_path)
-
-def add_edge_lengths(G):
-    """Ensure every edge has a 'length' attribute."""
-    for u, v, key, data in G.edges(keys=True, data=True):
-        if "length" not in data or data["length"] is None:
-            lat1, lon1 = G.nodes[u]["y"], G.nodes[u]["x"]
-            lat2, lon2 = G.nodes[v]["y"], G.nodes[v]["x"]
-            R = 6371000
-            dlat = radians(lat2 - lat1)
-            dlon = radians(lon2 - lon1)
-            a = sin(dlat / 2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2)**2
-            c = 2 * atan2(sqrt(a), sqrt(1 - a))
-            data["length"] = R * c
-    return G
+        # gdown handles Google Drive confirmation tokens for large files
+        gdown.download(id=drive_id_local, output=local_path_local, quiet=False)
+    G_loaded = ox.load_graphml(local_path_local)
+    return G_loaded
 
 G = load_graph_from_drive()
+
+# ------------------------------
+# 2) Ensure 'length' on edges (do not cache; G is unhashable)
+# ------------------------------
+def add_edge_lengths(G_local):
+    """Ensure every edge has a 'length' attribute (meters)."""
+    for u, v, key, data in G_local.edges(keys=True, data=True):
+        if "length" not in data or data["length"] is None:
+            # node coordinates must exist
+            lat1, lon1 = G_local.nodes[u].get("y"), G_local.nodes[u].get("x")
+            lat2, lon2 = G_local.nodes[v].get("y"), G_local.nodes[v].get("x")
+            # if any coordinate missing, skip
+            if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+                data["length"] = 1.0
+                continue
+            R = 6371000  # meters
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+            c = 2 * atan2(sqrt(a), sqrt(1 - a))
+            data["length"] = R * c
+    return G_local
+
 G = add_edge_lengths(G)
 
-# Convert graph to GeoDataFrames (cached to avoid reprocessing)
-@st.cache_resource
-def get_graph_gdfs(G):
-    return ox.graph_to_gdfs(G)
-
-nodes, edges = get_graph_gdfs(G)
+# ------------------------------
+# 3) Graph -> GeoDataFrames (no caching of functions that take G)
+# ------------------------------
+nodes, edges = ox.graph_to_gdfs(G)  # nodes: GeoDataFrame
 
 # ------------------------------
-# 2️⃣ Flood Risk Data (Synthetic, Cached)
+# 4) Flood values: cache only numeric generator (safe)
 # ------------------------------
 @st.cache_data
-def generate_flood_values(num_nodes, seed=42):
+def generate_flood_values(num_nodes: int, seed: int = 42):
     np.random.seed(seed)
     return np.random.rand(num_nodes)
 
-def compute_flood_data(nodes):
-    flood_vals = generate_flood_values(len(nodes))
-    nodes = nodes.copy()
-    nodes["flood_value"] = flood_vals
+def attach_flood_values(nodes_gdf):
+    flood_vals = generate_flood_values(len(nodes_gdf))
+    nodes_copy = nodes_gdf.copy()
+    nodes_copy["flood_value"] = flood_vals
     min_val = float(np.min(flood_vals))
     max_val = float(np.max(flood_vals))
     range_val = max_val - min_val if max_val != min_val else 1.0
-    return nodes, min_val, max_val, range_val
+    return nodes_copy, min_val, max_val, range_val
 
-nodes, min_val, max_val, range_val = compute_flood_data(nodes)
+nodes, min_val, max_val, range_val = attach_flood_values(nodes)
 
 # ------------------------------
-# 3️⃣ Map Setup (Faster tiles)
+# 5) Precompute simple arrays for fast nearest-node (no hashing)
+# ------------------------------
+# Build node_id list and coordinate arrays only once per run
+node_ids = list(nodes.index)
+node_y = nodes.geometry.y.to_numpy()  # lat
+node_x = nodes.geometry.x.to_numpy()  # lon
+
+def nearest_node_fast(lat, lon):
+    """Vectorized approximate nearest node (Haversine, returns node id)."""
+    # Compute haversine distances vectorized (fast in numpy)
+    dlat = np.radians(node_y - lat)
+    dlon = np.radians(node_x - lon)
+    a = np.sin(dlat / 2) ** 2 + np.cos(np.radians(lat)) * np.cos(np.radians(node_y)) * np.sin(dlon / 2) ** 2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    dist = 6371 * c  # kilometers
+    idx = np.argmin(dist)
+    return node_ids[int(idx)]
+
+# ------------------------------
+# 6) Build initial Folium map (sampled markers for speed)
 # ------------------------------
 st.subheader("🗺️ Pick Start and End Locations on the Map")
 
-center_lat, center_lon = nodes.geometry.y.mean(), nodes.geometry.x.mean()
+center_lat, center_lon = float(node_y.mean()), float(node_x.mean())
 m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles="CartoDB positron")
 
-# Draw flood risk markers (simplified to speed up rendering)
-sample_nodes = nodes.sample(min(2000, len(nodes)))  # plot fewer points for speed
-for _, row in sample_nodes.iterrows():
+# Sample nodes to plot (limit for speed in browser)
+max_plot = 2000
+if len(nodes) <= max_plot:
+    plot_nodes = nodes
+else:
+    plot_nodes = nodes.sample(max_plot, random_state=42)
+
+for _, row in plot_nodes.iterrows():
     flood_norm = (row["flood_value"] - min_val) / range_val
     color = cm.Reds(flood_norm)
     hexcolor = mcolors.rgb2hex(color[:3])
@@ -99,23 +132,23 @@ for _, row in sample_nodes.iterrows():
         color=hexcolor,
         fill=True,
         fill_opacity=0.5,
+        parse_html=False,
     ).add_to(m)
 
-coords = st_folium(m, height=500, width=800, returned_objects=["last_clicked"])
+# Render the map and capture clicks
+coords = st_folium(m, height=560, width=1000, returned_objects=["last_clicked"])
 
 # ------------------------------
-# 4️⃣ Handle Map Clicks
+# 7) Handle clicks (session_state keeps last two)
 # ------------------------------
-start_lat, start_lon, end_lat, end_lon = None, None, None, None
+start_lat = start_lon = end_lat = end_lon = None
 
 if coords.get("last_clicked"):
     if "all_clicks" not in st.session_state:
         st.session_state["all_clicks"] = []
-    if (
-        len(st.session_state["all_clicks"]) == 0
-        or coords["last_clicked"] != st.session_state["all_clicks"][-1]
-    ):
-        st.session_state["all_clicks"].append(coords["last_clicked"])
+    last = coords["last_clicked"]
+    if not st.session_state["all_clicks"] or last != st.session_state["all_clicks"][-1]:
+        st.session_state["all_clicks"].append(last)
         if len(st.session_state["all_clicks"]) > 2:
             st.session_state["all_clicks"] = st.session_state["all_clicks"][-2:]
 
@@ -127,44 +160,43 @@ if coords.get("last_clicked"):
         end_lon = st.session_state["all_clicks"][1]["lng"]
 
 # ------------------------------
-# 5️⃣ Route Calculation (Optimized)
+# 8) If both points selected => compute and draw path
 # ------------------------------
-def nearest_node_fast(G, lat, lon):
-    """Vectorized nearest node search (fast NumPy method)."""
-    x = np.array([d["x"] for n, d in G.nodes(data=True)])
-    y = np.array([d["y"] for n, d in G.nodes(data=True)])
-    dlat = np.radians(y - lat)
-    dlon = np.radians(x - lon)
-    a = np.sin(dlat / 2) ** 2 + np.cos(np.radians(lat)) * np.cos(np.radians(y)) * np.sin(dlon / 2) ** 2
-    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-    dist = 6371 * c
-    nearest_idx = np.argmin(dist)
-    return list(G.nodes())[nearest_idx]
-
 if start_lat and end_lat:
     st.success(f"Start: ({start_lat:.5f}, {start_lon:.5f}) → End: ({end_lat:.5f}, {end_lon:.5f})")
 
-    u = nearest_node_fast(G, start_lat, start_lon)
-    v = nearest_node_fast(G, end_lat, end_lon)
+    u = nearest_node_fast(start_lat, start_lon)
+    v = nearest_node_fast(end_lat, end_lon)
 
-    def edge_weight(u, v, d):
-        f1 = nodes.at[u, "flood_value"]
-        f2 = nodes.at[v, "flood_value"]
+    def edge_weight(u_local, v_local, data_local):
+        # safe flood lookup (fallback to 0 if node missing)
+        try:
+            f1 = nodes.at[u_local, "flood_value"]
+        except Exception:
+            f1 = 0.0
+        try:
+            f2 = nodes.at[v_local, "flood_value"]
+        except Exception:
+            f2 = 0.0
         factor = (f1 + f2) / 2
-        length = d.get("length", 1.0)
+        length = data_local.get("length", 1.0)
         return length * (1 + 10 * factor)
 
-    try:
-        safest_path = nx.shortest_path(G, source=u, target=v, weight=edge_weight)
-        path_coords = [(nodes.at[n, "geometry"].y, nodes.at[n, "geometry"].x) for n in safest_path]
+    with st.spinner("🧭 Calculating safest path..."):
+        try:
+            safest_path = nx.shortest_path(G, source=u, target=v, weight=edge_weight)
+            path_coords = [(nodes.at[n, "geometry"].y, nodes.at[n, "geometry"].x) for n in safest_path]
 
-        m2 = folium.Map(location=[start_lat, start_lon], zoom_start=13, tiles="CartoDB positron")
-        folium.Marker([start_lat, start_lon], icon=folium.Icon(color="green"), tooltip="Start").add_to(m2)
-        folium.Marker([end_lat, end_lon], icon=folium.Icon(color="red"), tooltip="End").add_to(m2)
-        folium.PolyLine(path_coords, color="blue", weight=6, tooltip="Safest Route").add_to(m2)
-        st_folium(m2, height=500, width=800)
+            # Draw result map (only path + start/end markers)
+            m2 = folium.Map(location=[start_lat, start_lon], zoom_start=13, tiles="CartoDB positron")
+            folium.Marker([start_lat, start_lon], icon=folium.Icon(color="green"), tooltip="Start").add_to(m2)
+            folium.Marker([end_lat, end_lon], icon=folium.Icon(color="red"), tooltip="End").add_to(m2)
+            folium.PolyLine(path_coords, color="blue", weight=6, tooltip="Safest Route").add_to(m2)
+            for pt in path_coords:
+                folium.CircleMarker(pt, radius=2, color="blue", fill=True).add_to(m2)
+            st_folium(m2, height=560, width=1000)
 
-    except Exception as e:
-        st.error(f"⚠️ Path could not be found: {e}")
+        except Exception as e:
+            st.error(f"⚠️ Path could not be found: {e}")
 else:
-    st.info("🟢 Click once for start point and once for end point on the map.")
+    st.info("Click once for start and once for end on the map (two clicks).")
