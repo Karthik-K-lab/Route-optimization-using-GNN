@@ -32,12 +32,11 @@ def load_graph_from_drive():
     return G
 
 def add_edge_lengths(G):
-    """Compute and add 'length' (in meters) for all edges."""
-    for u, v, data in G.edges(data=True):
+    """Ensure every edge has a 'length' attribute."""
+    for u, v, key, data in G.edges(keys=True, data=True):
         if 'length' not in data or data['length'] is None:
             lat1, lon1 = G.nodes[u]['y'], G.nodes[u]['x']
             lat2, lon2 = G.nodes[v]['y'], G.nodes[v]['x']
-            # Haversine distance
             R = 6371000
             dlat = radians(lat2 - lat1)
             dlon = radians(lon2 - lon1)
@@ -45,6 +44,7 @@ def add_edge_lengths(G):
             c = 2 * atan2(sqrt(a), sqrt(1 - a))
             data['length'] = R * c
     return G
+
 # Load the graph
 G = load_graph_from_drive()
 G = add_edge_lengths(G)
@@ -143,7 +143,9 @@ if start_lat and end_lat:
         f1 = nodes.at[u, "flood_value"]
         f2 = nodes.at[v, "flood_value"]
         factor = (f1 + f2) / 2
-        return d["length"] * (1 + 10 * factor)
+        length = d.get("length", 1.0)  # fallback if missing
+        return length * (1 + 10 * factor)
+
 
     try:
         safest_path = nx.shortest_path(G, source=u, target=v, weight=edge_weight)
