@@ -6,6 +6,7 @@ import networkx as nx
 import geopandas as gpd
 import numpy as np
 import folium
+import requests
 from streamlit_folium import st_folium
 from shapely.geometry import Point
 from matplotlib import cm, colors as mcolors
@@ -13,16 +14,25 @@ from matplotlib import cm, colors as mcolors
 st.title("Flood-Safe Route Planner (Demo)")
 
 # 1. Area of interest input
-place = st.text_input("Enter your area or city (e.g., Chennai, India):", "Chennai, India")
 
-@st.cache_resource(show_spinner=False)
-def load_graph(place):
-    G = ox.graph_from_place(place, network_type='drive')
-    nodes, edges = ox.graph_to_gdfs(G)
-    return G, nodes, edges
+drive_url = "https://drive.google.com/uc?export=download&id=1AbCdEfGh123456789"
+local_path = "map_data.graphml"
+
+@st.cache_data(show_spinner=False)
+def load_graph_from_drive():
+    # Download only if not already cached
+    if not os.path.exists(local_path):
+        st.info("Downloading map data from Google Drive … (only once)")
+        response = requests.get(drive_url)
+        response.raise_for_status()
+        with open(local_path, "wb") as f:
+            f.write(response.content)
+    # Load the graph
+    G = ox.load_graphml(local_path)
+    return G
 
 if place:
-    G, nodes, edges = load_graph(place)
+    G = load_graph_from_drive()
 
     # 2. Generate synthetic flood values for demonstration
     np.random.seed(42)
