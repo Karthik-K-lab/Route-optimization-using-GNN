@@ -36,7 +36,6 @@ def load_graph_from_drive():
         gdown.download(id=drive_id, output=local_path, quiet=False)
     return ox.load_graphml(local_path)
 
-@st.cache_resource
 def add_edge_lengths(G):
     """Ensure every edge has a 'length' attribute."""
     for u, v, key, data in G.edges(keys=True, data=True):
