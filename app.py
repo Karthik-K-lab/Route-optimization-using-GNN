@@ -7,6 +7,7 @@ import networkx as nx
 import geopandas as gpd
 import numpy as np
 import folium
+from math import radians, sin, cos, sqrt, atan2
 import requests
 import gdown
 import os
@@ -101,7 +102,25 @@ if start_lat and end_lat:
     st.success(f"Start: ({start_lat:.5f}, {start_lon:.5f}) → End: ({end_lat:.5f}, {end_lon:.5f})")
 
     def nearest_node(G, lat, lon):
-        return ox.distance.nearest_nodes(G, lon, lat)
+    """Find the nearest node manually (no rtree or pygeos needed)."""
+        min_dist = float("inf")
+        nearest = None
+        for node, data in G.nodes(data=True):
+            node_lat = data.get('y')
+            node_lon = data.get('x')
+            if node_lat is None or node_lon is None:
+                continue
+            # Haversine distance (in km)
+            R = 6371
+            dlat = radians(lat - node_lat)
+            dlon = radians(lon - node_lon)
+            a = sin(dlat / 2)**2 + cos(radians(lat)) * cos(radians(node_lat)) * sin(dlon / 2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1 - a))
+            dist = R * c
+            if dist < min_dist:
+                min_dist = dist
+                nearest = node
+        return nearest
 
     u = nearest_node(G, start_lat, start_lon)
     v = nearest_node(G, end_lat, end_lon)
